@@ -293,6 +293,18 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.ios-sound-hint {
+  font-size: 0.78rem;
+  color: #e9d5ff;
+  margin-top: 14px;
+  background: rgba(145, 107, 191, 0.18);
+  border: 1px solid rgba(145, 107, 191, 0.4);
+  padding: 8px 14px;
+  border-radius: 10px;
+  text-align: center;
+  font-weight: 500;
+}
+
 /* Secondary Actions */
 .stage-secondary-controls {
   display: flex;

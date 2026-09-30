@@ -38,7 +38,7 @@ export class LivePreviewEngine {
     // Context is lazily initialized upon first user interaction to comply with browser autoplay policies
   }
 
-  private getAudioContext(): AudioContext {
+  public getAudioContext(): AudioContext {
     if (!this.ctx || this.ctx.state === 'closed') {
       const AudioContextClass =
         window.AudioContext ||

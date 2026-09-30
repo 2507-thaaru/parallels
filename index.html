@@ -11,7 +11,7 @@
     <canvas id="shaderCanvas"></canvas>
 
     <!-- Hidden native audio element for screen-off playback -->
-    <audio id="persistentAudioElement" preload="auto"></audio>
+    <audio id="persistentAudioElement" preload="auto" playsinline webkit-playsinline></audio>
 
     <div class="app-container">
       <!-- Top Bar -->
@@ -66,6 +66,7 @@
             <span id="currentTimeLabel">0:00</span>
             <span id="durationLabel">0:00</span>
           </div>
+          <div class="ios-sound-hint">🔊 iPhone: If no sound, turn off Silent Mode (Action Button / Bell in Control Center) & turn up volume</div>
         </div>
 
         <!-- Secondary Controls -->

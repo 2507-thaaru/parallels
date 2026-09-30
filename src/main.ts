@@ -222,8 +222,34 @@ audioFileInput.addEventListener('change', async () => {
   }
 });
 
+// iOS Audio Session Unlocker
+let isIOSAudioUnlocked = false;
+function unlockIOSAudio() {
+  const ctx = previewEngine.getAudioContext();
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+
+  if (isIOSAudioUnlocked) return;
+  isIOSAudioUnlocked = true;
+
+  try {
+    const silentBuf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = silentBuf;
+    src.connect(ctx.destination);
+    src.start(0);
+  } catch {}
+}
+
+['touchstart', 'touchend', 'pointerdown', 'click'].forEach(evt => {
+  document.addEventListener(evt, unlockIOSAudio, { passive: true });
+});
+
 // 8. Playback Logic (supports both Live Preview and Persistent Rendered Audio for screen-off)
 function togglePlayback() {
+  unlockIOSAudio();
+
   if (isPlayingNativeAudio) {
     if (persistentAudio.paused) {
       persistentAudio.play();
