@@ -1,6 +1,6 @@
 # Slowed + Reverb Audio Player (PWA)
 
-A privacy-first, client-side web application for creating slowed + reverb and sped-up versions of your own audio tracks, saving them into playlists, and playing them continuously with the phone screen off (including on iPhone 15 & Android).
+A privacy-first, client-side web application for creating slowed + reverb and sped-up versions of your own audio tracks, saving them into playlists, and playing them continuously with the phone screen off (including on ios & Android).
 
 ---
 
