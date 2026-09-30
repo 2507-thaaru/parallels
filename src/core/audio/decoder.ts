@@ -20,6 +20,9 @@ export async function decodeAudioData(
   context?: BaseAudioContext
 ): Promise<AudioBuffer> {
   const ctx = context || getSharedAudioContext();
+  if ('resume' in ctx && typeof (ctx as AudioContext).resume === 'function' && ctx.state === 'suspended') {
+    await (ctx as AudioContext).resume().catch(() => {});
+  }
   
   // Note: slice(0) avoids detaching the original buffer in WebKit
   const bufferCopy = arrayBuffer.slice(0);

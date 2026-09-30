@@ -28,16 +28,16 @@
               <line x1="12" y1="3" x2="12" y2="15"></line>
             </svg>
             <span>Upload Song</span>
-            <input type="file" id="audioFileInput" accept="audio/*" />
+            <input type="file" id="audioFileInput" accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav" />
           </label>
         </div>
       </header>
 
       <!-- HERO STAGE & MUSIC PLAY TOGGLE -->
       <section class="glass-panel hero-stage">
-        <div class="track-meta-display">
+        <div class="track-meta-display" id="heroUploadArea" style="cursor: pointer;" title="Tap to select song">
           <h2 class="current-track-title" id="currentTrackTitle">No Song Selected</h2>
-          <p class="current-track-subtitle" id="currentTrackSubtitle">Upload an MP3 to start altering speed and reverb</p>
+          <p class="current-track-subtitle" id="currentTrackSubtitle">Tap here or "Upload Song" to select an audio file</p>
         </div>
 
         <!-- The Central Play/Pause Toggle -->

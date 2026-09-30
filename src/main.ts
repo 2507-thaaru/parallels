@@ -179,6 +179,13 @@ chipSpedUp.addEventListener('click', () => applyPreset(1.25, 0.00, 1.0, 0, chipS
 chipNightcore.addEventListener('click', () => applyPreset(1.35, 0.00, 1.0, 0, chipNightcore));
 chipOriginal.addEventListener('click', () => applyPreset(1.00, 0.00, 1.0, 0, chipOriginal));
 
+const heroUploadArea = document.getElementById('heroUploadArea');
+if (heroUploadArea) {
+  heroUploadArea.addEventListener('click', () => {
+    audioFileInput.click();
+  });
+}
+
 // 7. Handle File Upload
 audioFileInput.addEventListener('change', async () => {
   const file = audioFileInput.files?.[0];
