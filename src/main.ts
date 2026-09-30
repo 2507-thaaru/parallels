@@ -1,5 +1,5 @@
 import { decodeAudioBlob } from './core/audio/decoder';
-import { LivePreviewEngine, LivePreviewState } from './core/audio/livePreview';
+import { LivePreviewEngine } from './core/audio/livePreview';
 import { renderAudioRecipe } from './core/audio/offlineRenderer';
 import { AudioRecipe } from './core/audio/types';
 import {
@@ -246,49 +246,118 @@ function unlockIOSAudio() {
   document.addEventListener(evt, unlockIOSAudio, { passive: true });
 });
 
-// 8. Playback Logic (supports both Live Preview and Persistent Rendered Audio for screen-off)
-function togglePlayback() {
-  unlockIOSAudio();
+// Native Background Audio Engine (Spotify-style background & screen-off playback)
+let currentRenderedBlob: Blob | null = null;
+let currentRenderedUrl: string | null = null;
+let currentRecipeHash: string = '';
+let isRenderingNativeAudio = false;
 
-  if (isPlayingNativeAudio) {
-    if (persistentAudio.paused) {
-      persistentAudio.play();
-      updatePlayToggleUI(true);
-    } else {
-      persistentAudio.pause();
-      updatePlayToggleUI(false);
+function getRecipeHash(title: string, recipe: AudioRecipe): string {
+  const r = recipe.reverb;
+  return `${title}|${recipe.speed.toFixed(2)}|${r ? `${r.wet.toFixed(2)}-${r.decaySeconds.toFixed(1)}-${r.predelayMs}` : 'none'}`;
+}
+
+async function prepareAndPlayNativeAudio(resumeTime?: number) {
+  if (!currentSourceBuffer) return;
+
+  const recipe = previewEngine.getRecipe();
+  const hash = getRecipeHash(currentSongTitle, recipe);
+
+  // If already rendered with current recipe
+  if (currentRenderedUrl && currentRecipeHash === hash && persistentAudio.src === currentRenderedUrl) {
+    if (resumeTime !== undefined && !isNaN(resumeTime)) {
+      persistentAudio.currentTime = resumeTime;
     }
+    setupMediaSession(currentSongTitle);
+    await persistentAudio.play();
+    updatePlayToggleUI(true);
+    isPlayingNativeAudio = true;
+    currentTrackSubtitle.textContent = `Screen-off & background playback active`;
     return;
   }
 
-  // Otherwise, toggling live preview engine
+  // Render to native WAV for continuous background playback
+  isRenderingNativeAudio = true;
+  currentTrackSubtitle.textContent = `Preparing Spotify-style background audio...`;
+
+  try {
+    const result = await renderAudioRecipe(currentSourceBuffer, recipe);
+    currentRenderedBlob = result.blob;
+    currentRenderedUrl = result.objectUrl;
+    currentRecipeHash = hash;
+
+    persistentAudio.src = result.objectUrl;
+    persistentAudio.loop = btnLoop.classList.contains('active');
+    durationLabel.textContent = formatTime(result.durationSec);
+    seekSlider.max = result.durationSec.toString();
+
+    if (resumeTime !== undefined && !isNaN(resumeTime) && resumeTime < result.durationSec) {
+      persistentAudio.currentTime = resumeTime;
+    }
+
+    setupMediaSession(currentSongTitle);
+    await persistentAudio.play();
+    updatePlayToggleUI(true);
+    isPlayingNativeAudio = true;
+    currentTrackSubtitle.textContent = `Screen-off & background playback active`;
+  } catch (err) {
+    console.error('Error rendering audio', err);
+    currentTrackSubtitle.textContent = `Error: ${(err as Error).message}`;
+  } finally {
+    isRenderingNativeAudio = false;
+  }
+}
+
+// 8. Playback Logic (Supports Spotify-style background & screen-off playback)
+async function togglePlayback() {
+  unlockIOSAudio();
+
   if (!currentSourceBuffer) {
     audioFileInput.click();
     return;
   }
 
-  const state = previewEngine.getState();
-  if (state.isPlaying) {
-    previewEngine.pause();
-  } else {
-    previewEngine.play();
+  if (isRenderingNativeAudio) return;
+
+  if (isPlayingNativeAudio && persistentAudio.src) {
+    const recipe = previewEngine.getRecipe();
+    const hash = getRecipeHash(currentSongTitle, recipe);
+
+    // If recipe hasn't changed, toggle play / pause
+    if (currentRecipeHash === hash) {
+      if (persistentAudio.paused) {
+        setupMediaSession(currentSongTitle);
+        await persistentAudio.play();
+        updatePlayToggleUI(true);
+      } else {
+        persistentAudio.pause();
+        updatePlayToggleUI(false);
+      }
+      return;
+    }
   }
+
+  // Recipe changed or first play: render and play native audio
+  await prepareAndPlayNativeAudio(persistentAudio.currentTime || 0);
 }
 
 playToggleBtn.addEventListener('click', togglePlayback);
 
-// Loop toggle
+// When slider changes are committed, update background audio if playing
+[speedSlider, reverbWetSlider, reverbDecaySlider, reverbPredelaySlider].forEach(slider => {
+  slider.addEventListener('change', () => {
+    if (isPlayingNativeAudio && !persistentAudio.paused) {
+      const pos = persistentAudio.currentTime;
+      prepareAndPlayNativeAudio(pos);
+    }
+  });
+});
+
+// Loop toggle (works with screen locked)
 btnLoop.addEventListener('click', () => {
-  if (isPlayingNativeAudio) {
-    persistentAudio.loop = !persistentAudio.loop;
-    btnLoop.classList.toggle('active', persistentAudio.loop);
-    loopLabel.textContent = persistentAudio.loop ? 'Loop: ON' : 'Loop';
-  } else {
-    const nextLoop = !previewEngine.getState().isLooping;
-    previewEngine.setLoop(nextLoop);
-    btnLoop.classList.toggle('active', nextLoop);
-    loopLabel.textContent = nextLoop ? 'Loop: ON' : 'Loop';
-  }
+  persistentAudio.loop = !persistentAudio.loop;
+  btnLoop.classList.toggle('active', persistentAudio.loop);
+  loopLabel.textContent = persistentAudio.loop ? 'Loop: ON' : 'Loop';
 });
 
 // Scrubber events
@@ -302,10 +371,8 @@ seekSlider.addEventListener('input', () => {
 
 seekSlider.addEventListener('change', () => {
   const targetTime = parseFloat(seekSlider.value);
-  if (isPlayingNativeAudio) {
+  if (persistentAudio.src) {
     persistentAudio.currentTime = targetTime;
-  } else {
-    previewEngine.seek(targetTime);
   }
   isUserSeeking = false;
 });
@@ -313,43 +380,69 @@ seekSlider.addEventListener('change', () => {
 seekSlider.addEventListener('mouseup', () => { isUserSeeking = false; });
 seekSlider.addEventListener('touchend', () => { isUserSeeking = false; });
 
-// Live preview engine state sync
-previewEngine.subscribe((state: LivePreviewState) => {
-  if (!isPlayingNativeAudio) {
-    updatePlayToggleUI(state.isPlaying);
-    if (!isUserSeeking && state.duration > 0) {
-      seekSlider.value = state.currentTime.toString();
-      currentTimeLabel.textContent = formatTime(state.currentTime);
-      durationLabel.textContent = formatTime(state.duration);
+// Persistent native audio state sync (for Spotify-style screen-off playback)
+persistentAudio.addEventListener('play', () => {
+  updatePlayToggleUI(true);
+});
+
+persistentAudio.addEventListener('pause', () => {
+  updatePlayToggleUI(false);
+});
+
+persistentAudio.addEventListener('timeupdate', () => {
+  if (!isUserSeeking && persistentAudio.duration) {
+    seekSlider.value = persistentAudio.currentTime.toString();
+    currentTimeLabel.textContent = formatTime(persistentAudio.currentTime);
+    durationLabel.textContent = formatTime(persistentAudio.duration || 0);
+
+    if ('setPositionState' in navigator.mediaSession && !isNaN(persistentAudio.duration)) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: persistentAudio.duration,
+          playbackRate: 1.0,
+          position: Math.min(persistentAudio.currentTime, persistentAudio.duration),
+        });
+      } catch {}
     }
   }
 });
 
-// Persistent native audio state sync (for screen-off playback)
-persistentAudio.addEventListener('timeupdate', () => {
-  if (isPlayingNativeAudio && !isUserSeeking) {
-    seekSlider.value = persistentAudio.currentTime.toString();
-    currentTimeLabel.textContent = formatTime(persistentAudio.currentTime);
-    durationLabel.textContent = formatTime(persistentAudio.duration || 0);
+persistentAudio.addEventListener('ended', async () => {
+  if (persistentAudio.loop) return;
+
+  // Auto-advance playlist
+  const songs = await getAllRenderedSongs();
+  if (songs.length > 0) {
+    const curIdx = songs.findIndex(s => s.id === currentPlayingId);
+    if (curIdx !== -1 && curIdx < songs.length - 1) {
+      playSavedSong(songs[curIdx + 1]);
+      return;
+    }
   }
+  updatePlayToggleUI(false);
 });
 
-persistentAudio.addEventListener('ended', () => {
-  if (isPlayingNativeAudio && !persistentAudio.loop) {
-    updatePlayToggleUI(false);
-  }
-});
-
-// 9. Save to Playlist (renders recipe to WAV and persists to IndexedDB)
+// 9. Save to Playlist (persists to IndexedDB for offline access)
 btnSavePlaylist.addEventListener('click', async () => {
   if (!currentSourceBuffer) return;
 
   btnSavePlaylist.disabled = true;
-  saveBtnLabel.textContent = 'Rendering WAV...';
+  saveBtnLabel.textContent = 'Saving to Playlist...';
 
   try {
     const recipe: AudioRecipe = previewEngine.getRecipe();
-    const result = await renderAudioRecipe(currentSourceBuffer, recipe);
+    let blobToSave = currentRenderedBlob;
+    let durToSave = persistentAudio.duration;
+
+    const hash = getRecipeHash(currentSongTitle, recipe);
+    if (!blobToSave || currentRecipeHash !== hash) {
+      const result = await renderAudioRecipe(currentSourceBuffer, recipe);
+      blobToSave = result.blob;
+      durToSave = result.durationSec;
+      currentRenderedBlob = result.blob;
+      currentRenderedUrl = result.objectUrl;
+      currentRecipeHash = hash;
+    }
 
     const versionId = 'v_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
     const newSong: RenderedSongRecord = {
@@ -357,8 +450,8 @@ btnSavePlaylist.addEventListener('click', async () => {
       trackId: 'track_' + Date.now(),
       title: currentSongTitle,
       recipe,
-      renderedBlob: result.blob,
-      renderedDurationSec: result.durationSec,
+      renderedBlob: blobToSave,
+      renderedDurationSec: durToSave || currentSourceBuffer.duration,
       createdAt: Date.now(),
     };
 
