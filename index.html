@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>parallels — slowed, sped-up & reverb player</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!-- 1. Animated WebGL1 "Silk" Shader Canvas -->
+    <canvas id="shaderCanvas"></canvas>
+
+    <!-- Hidden native audio element for screen-off playback -->
+    <audio id="persistentAudioElement" preload="auto"></audio>
+
+    <div class="app-container">
+      <!-- Top Bar -->
+      <header class="header">
+        <a href="#" class="brand">
+          <span class="brand-title">parallels</span>
+          <span class="brand-badge">pwa</span>
+        </a>
+        <div class="header-actions">
+          <label class="upload-btn-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <span>Upload Song</span>
+            <input type="file" id="audioFileInput" accept="audio/*" />
+          </label>
+        </div>
+      </header>
+
+      <!-- HERO STAGE & MUSIC PLAY TOGGLE -->
+      <section class="glass-panel hero-stage">
+        <div class="track-meta-display">
+          <h2 class="current-track-title" id="currentTrackTitle">No Song Selected</h2>
+          <p class="current-track-subtitle" id="currentTrackSubtitle">Upload an MP3 to start altering speed and reverb</p>
+        </div>
+
+        <!-- The Central Play/Pause Toggle -->
+        <div class="play-toggle-container">
+          <button id="playToggleBtn" class="play-toggle-btn" aria-label="Play / Pause Toggle" title="Play / Pause">
+            <div id="waveBars" class="wave-bars" style="display: none;">
+              <span class="wave-bar"></span>
+              <span class="wave-bar"></span>
+              <span class="wave-bar"></span>
+              <span class="wave-bar"></span>
+            </div>
+            <svg id="playIcon" class="toggle-icon" viewBox="0 0 24 24">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <svg id="pauseIcon" class="toggle-icon" viewBox="0 0 24 24" style="display: none;">
+              <rect x="6" y="4" width="4" height="16"></rect>
+              <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Scrubber / Timeline -->
+        <div class="scrubber-container">
+          <input type="range" id="seekSlider" class="scrubber-slider" min="0" max="100" step="0.1" value="0" />
+          <div class="time-row">
+            <span id="currentTimeLabel">0:00</span>
+            <span id="durationLabel">0:00</span>
+          </div>
+        </div>
+
+        <!-- Secondary Controls -->
+        <div class="stage-secondary-controls">
+          <button id="btnLoop" class="btn-pill">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="17 1 21 5 17 9"></polyline>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+              <polyline points="7 23 3 19 7 15"></polyline>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+            </svg>
+            <span id="loopLabel">Loop</span>
+          </button>
+
+          <button id="btnSavePlaylist" class="btn-pill primary" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            <span id="saveBtnLabel">Save to Playlist</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- CONTROLS: SPEED & REVERB SLIDERS -->
+      <section class="glass-panel" id="controlsPanel">
+        <div class="panel-header">
+          <span class="panel-title">Recipe Controls</span>
+          <span id="recipeBadge" class="badge-tag">0.85x slowed</span>
+        </div>
+
+        <!-- Presets -->
+        <div class="presets-bar">
+          <button class="preset-chip active" id="chipSlowed">Slowed + Reverb (0.85x)</button>
+          <button class="preset-chip" id="chipDeepSlow">Deep Slow (0.75x)</button>
+          <button class="preset-chip" id="chipSpedUp">Sped Up (1.25x)</button>
+          <button class="preset-chip" id="chipNightcore">Nightcore (1.35x)</button>
+          <button class="preset-chip" id="chipOriginal">Original (1.00x)</button>
+        </div>
+
+        <div class="controls-grid">
+          <!-- Column 1: Speed & Pitch -->
+          <div>
+            <div class="slider-group">
+              <div class="slider-label-row">
+                <span class="slider-label">Speed / Pitch</span>
+                <span id="speedReadout" class="slider-readout">0.85x</span>
+              </div>
+              <input type="range" id="speedSlider" class="range-input" min="0.5" max="2.0" step="0.01" value="0.85" />
+            </div>
+          </div>
+
+          <!-- Column 2: Reverb Parameters -->
+          <div>
+            <div class="slider-group">
+              <div class="slider-label-row">
+                <span class="slider-label">Reverb Wet Mix</span>
+                <span id="wetReadout" class="slider-readout">0.45</span>
+              </div>
+              <input type="range" id="reverbWetSlider" class="range-input" min="0.0" max="1.0" step="0.02" value="0.45" />
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-label-row">
+                <span class="slider-label">Reverb Decay</span>
+                <span id="decayReadout" class="slider-readout">2.8s</span>
+              </div>
+              <input type="range" id="reverbDecaySlider" class="range-input" min="0.5" max="8.0" step="0.1" value="2.8" />
+            </div>
+
+            <div class="slider-group">
+              <div class="slider-label-row">
+                <span class="slider-label">Pre-delay</span>
+                <span id="predelayReadout" class="slider-readout">20ms</span>
+              </div>
+              <input type="range" id="reverbPredelaySlider" class="range-input" min="0" max="200" step="5" value="20" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCROLL-DOWN PLAYLIST SECTION -->
+      <section class="playlist-section" id="playlistSection">
+        <div class="section-title-row">
+          <div>
+            <h3 class="section-title">Your Playlist</h3>
+            <span class="playlist-count" id="playlistCount">0 songs saved on this device</span>
+          </div>
+        </div>
+
+        <div class="playlist-list" id="playlistContainer">
+          <div class="playlist-empty">
+            No songs saved in your playlist yet. Upload an audio track, tweak speed & reverb, and hit "Save to Playlist"!
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
