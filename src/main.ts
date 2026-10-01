@@ -9,6 +9,7 @@ import {
   RenderedSongRecord,
 } from './core/storage/db';
 import { SilkShaderRenderer } from './core/visuals/silkShader';
+import { authManager } from './core/auth/authManager';
 
 // 1. Initialize Animated WebGL1 "Silk" Flow Shader Background
 const canvas = document.getElementById('shaderCanvas') as HTMLCanvasElement;
@@ -411,7 +412,8 @@ persistentAudio.addEventListener('ended', async () => {
   if (persistentAudio.loop) return;
 
   // Auto-advance playlist
-  const songs = await getAllRenderedSongs();
+  const activeAccount = authManager.getActiveAccount();
+  const songs = await getAllRenderedSongs(activeAccount?.id);
   if (songs.length > 0) {
     const curIdx = songs.findIndex(s => s.id === currentPlayingId);
     if (curIdx !== -1 && curIdx < songs.length - 1) {
@@ -444,10 +446,12 @@ btnSavePlaylist.addEventListener('click', async () => {
       currentRecipeHash = hash;
     }
 
+    const activeAccount = authManager.getActiveAccount();
     const versionId = 'v_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
     const newSong: RenderedSongRecord = {
       id: versionId,
       trackId: 'track_' + Date.now(),
+      userId: activeAccount?.id,
       title: currentSongTitle,
       recipe,
       renderedBlob: blobToSave,
@@ -511,11 +515,14 @@ async function playSavedSong(song: RenderedSongRecord) {
     console.warn('Playback initiation requires user interaction', e);
   }
 
-  renderPlaylistItems(await getAllRenderedSongs());
+  const activeAccount = authManager.getActiveAccount();
+  renderPlaylistItems(await getAllRenderedSongs(activeAccount?.id));
 }
 
 function renderPlaylistItems(songs: RenderedSongRecord[]) {
-  playlistCount.textContent = `${songs.length} song${songs.length === 1 ? '' : 's'} saved on this device`;
+  const activeAccount = authManager.getActiveAccount();
+  const ownerLabel = activeAccount ? `for ${activeAccount.displayName}` : 'on this device';
+  playlistCount.textContent = `${songs.length} song${songs.length === 1 ? '' : 's'} saved ${ownerLabel}`;
 
   if (songs.length === 0) {
     playlistContainer.innerHTML = `
@@ -584,9 +591,273 @@ function renderPlaylistItems(songs: RenderedSongRecord[]) {
 }
 
 async function loadPlaylistView() {
-  const songs = await getAllRenderedSongs();
+  const activeAccount = authManager.getActiveAccount();
+  const songs = await getAllRenderedSongs(activeAccount?.id);
   renderPlaylistItems(songs);
 }
 
-// Initial load of saved playlist on page mount
-loadPlaylistView();
+// ==========================================
+// 11. Multi-Account Management & Modal Wiring
+// ==========================================
+const accountBtn = document.getElementById('accountBtn') as HTMLButtonElement;
+const accountAvatar = document.getElementById('accountAvatar') as HTMLElement;
+const accountLabel = document.getElementById('accountLabel') as HTMLElement;
+const accountModal = document.getElementById('accountModal') as HTMLElement;
+const modalTitle = document.getElementById('modalTitle') as HTMLElement;
+const closeModalBtn = document.getElementById('closeModalBtn') as HTMLButtonElement;
+const closeModalActionBtn = document.getElementById('closeModalActionBtn') as HTMLButtonElement;
+const loggedInView = document.getElementById('loggedInView') as HTMLElement;
+const profileAvatarLarge = document.getElementById('profileAvatarLarge') as HTMLElement;
+const profileName = document.getElementById('profileName') as HTMLElement;
+const profileEmail = document.getElementById('profileEmail') as HTMLElement;
+const savedAccountsList = document.getElementById('savedAccountsList') as HTMLElement;
+const btnAddAccount = document.getElementById('btnAddAccount') as HTMLButtonElement;
+const btnLogout = document.getElementById('btnLogout') as HTMLButtonElement;
+const authFormView = document.getElementById('authFormView') as HTMLElement;
+const tabLogin = document.getElementById('tabLogin') as HTMLButtonElement;
+const tabSignup = document.getElementById('tabSignup') as HTMLButtonElement;
+const authForm = document.getElementById('authForm') as HTMLFormElement;
+const groupDisplayName = document.getElementById('groupDisplayName') as HTMLElement;
+const inputDisplayName = document.getElementById('inputDisplayName') as HTMLInputElement;
+const inputEmail = document.getElementById('inputEmail') as HTMLInputElement;
+const inputPassword = document.getElementById('inputPassword') as HTMLInputElement;
+const authErrorMsg = document.getElementById('authErrorMsg') as HTMLElement;
+const btnSubmitAuth = document.getElementById('btnSubmitAuth') as HTMLButtonElement;
+const authSavedAccountsBlock = document.getElementById('authSavedAccountsBlock') as HTMLElement;
+const authSavedAccountsList = document.getElementById('authSavedAccountsList') as HTMLElement;
+
+let authTab: 'login' | 'signup' = 'login';
+let isShowingAddAccountForm = false;
+
+function openAccountModal() {
+  isShowingAddAccountForm = false;
+  accountModal.style.display = 'flex';
+  renderAccountModal();
+}
+
+function closeAccountModal() {
+  accountModal.style.display = 'none';
+  if (authErrorMsg) {
+    authErrorMsg.style.display = 'none';
+    authErrorMsg.textContent = '';
+  }
+  isShowingAddAccountForm = false;
+}
+
+function setAuthTab(tab: 'login' | 'signup') {
+  authTab = tab;
+  if (authErrorMsg) authErrorMsg.style.display = 'none';
+
+  if (tab === 'login') {
+    tabLogin.classList.add('active');
+    tabSignup.classList.remove('active');
+    groupDisplayName.style.display = 'none';
+    btnSubmitAuth.textContent = 'Log In';
+    modalTitle.textContent = isShowingAddAccountForm ? 'Switch / Log In to Account' : 'Log In';
+  } else {
+    tabSignup.classList.add('active');
+    tabLogin.classList.remove('active');
+    groupDisplayName.style.display = 'block';
+    btnSubmitAuth.textContent = 'Create Account';
+    modalTitle.textContent = 'Create New Account';
+  }
+}
+
+function renderAccountModal() {
+  const activeAccount = authManager.getActiveAccount();
+  const allAccounts = authManager.getSavedAccounts();
+
+  // If user is currently logged in and not explicitly opening the add account form
+  if (activeAccount && !isShowingAddAccountForm) {
+    modalTitle.textContent = 'Your Account';
+    loggedInView.style.display = 'block';
+    authFormView.style.display = 'none';
+
+    profileAvatarLarge.style.background = activeAccount.avatarGradient;
+    profileAvatarLarge.textContent = activeAccount.displayName.charAt(0).toUpperCase();
+    profileName.textContent = activeAccount.displayName;
+    profileEmail.textContent = activeAccount.email;
+
+    // Render list of other saved accounts
+    const otherAccounts = allAccounts.filter((a) => a.id !== activeAccount.id);
+    if (otherAccounts.length === 0) {
+      savedAccountsList.innerHTML = `
+        <div style="font-size: 0.85rem; color: var(--text-muted); padding: 8px 0; text-align: center;">
+          No other accounts saved on this device.
+        </div>
+      `;
+    } else {
+      savedAccountsList.innerHTML = '';
+      otherAccounts.forEach((acc) => {
+        const item = document.createElement('div');
+        item.className = 'saved-account-item';
+        item.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+            <span class="account-avatar-mini" style="background: ${acc.avatarGradient}; flex-shrink: 0;">
+              ${acc.displayName.charAt(0).toUpperCase()}
+            </span>
+            <div style="min-width: 0;">
+              <div style="font-weight: 600; font-size: 0.9rem; color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                ${acc.displayName}
+              </div>
+              <div style="font-size: 0.78rem; color: var(--text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                ${acc.email}
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+            <button class="btn-switch-mini" data-switch-id="${acc.id}">Switch</button>
+            <button class="btn-icon-delete" data-remove-id="${acc.id}" title="Remove from device" style="opacity: 0.6; padding: 4px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
+        `;
+
+        const switchBtn = item.querySelector('[data-switch-id]') as HTMLButtonElement;
+        switchBtn?.addEventListener('click', () => {
+          authManager.switchAccount(acc.id);
+          renderAccountModal();
+        });
+
+        const removeBtn = item.querySelector('[data-remove-id]') as HTMLButtonElement;
+        removeBtn?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (confirm(`Remove "${acc.displayName}" from saved accounts?`)) {
+            authManager.removeAccount(acc.id);
+            renderAccountModal();
+          }
+        });
+
+        savedAccountsList.appendChild(item);
+      });
+    }
+  } else {
+    // Show login or signup form
+    loggedInView.style.display = 'none';
+    authFormView.style.display = 'block';
+    setAuthTab(authTab);
+
+    // If there are accounts saved on device, show quick switcher below form
+    if (allAccounts.length > 0) {
+      authSavedAccountsBlock.style.display = 'block';
+      authSavedAccountsList.innerHTML = '';
+      allAccounts.forEach((acc) => {
+        const isCurrent = activeAccount && acc.id === activeAccount.id;
+        const item = document.createElement('div');
+        item.className = `saved-account-item ${isCurrent ? 'active-account' : ''}`;
+        item.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+            <span class="account-avatar-mini" style="background: ${acc.avatarGradient}; flex-shrink: 0;">
+              ${acc.displayName.charAt(0).toUpperCase()}
+            </span>
+            <div style="min-width: 0;">
+              <div style="font-weight: 600; font-size: 0.9rem; color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                ${acc.displayName} ${isCurrent ? '<span style="font-size:0.75rem; color:#c084fc; margin-left:4px;">(Current)</span>' : ''}
+              </div>
+              <div style="font-size: 0.78rem; color: var(--text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                ${acc.email}
+              </div>
+            </div>
+          </div>
+          <div>
+            ${!isCurrent ? `<button class="btn-switch-mini" data-switch-id="${acc.id}">Switch</button>` : ''}
+          </div>
+        `;
+
+        const switchBtn = item.querySelector('[data-switch-id]') as HTMLButtonElement;
+        switchBtn?.addEventListener('click', () => {
+          authManager.switchAccount(acc.id);
+          isShowingAddAccountForm = false;
+          renderAccountModal();
+        });
+
+        authSavedAccountsList.appendChild(item);
+      });
+    } else {
+      authSavedAccountsBlock.style.display = 'none';
+    }
+  }
+}
+
+// Listeners for Modal Interactions
+accountBtn.addEventListener('click', openAccountModal);
+closeModalBtn.addEventListener('click', closeAccountModal);
+closeModalActionBtn.addEventListener('click', closeAccountModal);
+
+accountModal.addEventListener('click', (e) => {
+  if (e.target === accountModal) {
+    closeAccountModal();
+  }
+});
+
+tabLogin.addEventListener('click', () => setAuthTab('login'));
+tabSignup.addEventListener('click', () => setAuthTab('signup'));
+
+btnAddAccount.addEventListener('click', () => {
+  isShowingAddAccountForm = true;
+  renderAccountModal();
+});
+
+btnLogout.addEventListener('click', async () => {
+  if (confirm('Log out from this account?')) {
+    await authManager.logout();
+    renderAccountModal();
+  }
+});
+
+authForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  authErrorMsg.style.display = 'none';
+  authErrorMsg.textContent = '';
+
+  const email = inputEmail.value.trim();
+  const password = inputPassword.value;
+  const displayName = inputDisplayName.value.trim();
+
+  if (!email) {
+    authErrorMsg.textContent = 'Please enter an email address.';
+    authErrorMsg.style.display = 'block';
+    return;
+  }
+
+  btnSubmitAuth.disabled = true;
+  btnSubmitAuth.textContent = 'Please wait...';
+
+  try {
+    if (authTab === 'signup') {
+      await authManager.createAccount(email, displayName, password);
+    } else {
+      await authManager.login(email, password);
+    }
+
+    inputEmail.value = '';
+    inputPassword.value = '';
+    inputDisplayName.value = '';
+    isShowingAddAccountForm = false;
+    closeAccountModal();
+  } catch (err: any) {
+    authErrorMsg.textContent = err?.message || 'Authentication error. Please try again.';
+    authErrorMsg.style.display = 'block';
+  } finally {
+    btnSubmitAuth.disabled = false;
+    btnSubmitAuth.textContent = authTab === 'login' ? 'Log In' : 'Create Account';
+  }
+});
+
+// Subscribe to auth state updates: sync header button and reload playlist
+authManager.subscribe((activeAccount) => {
+  if (activeAccount) {
+    accountAvatar.style.display = 'inline-flex';
+    accountAvatar.style.background = activeAccount.avatarGradient;
+    accountAvatar.textContent = activeAccount.displayName.charAt(0).toUpperCase();
+    accountLabel.textContent = activeAccount.displayName;
+  } else {
+    accountAvatar.style.display = 'none';
+    accountLabel.textContent = 'Log In';
+  }
+  loadPlaylistView();
+});
+

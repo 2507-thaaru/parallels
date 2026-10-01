@@ -22,9 +22,12 @@
       <header class="header">
         <a href="#" class="brand">
           <span class="brand-title">parallels</span>
-          <span class="brand-badge">pwa</span>
         </a>
         <div class="header-actions">
+          <button id="accountBtn" class="account-btn" aria-label="Account">
+            <span id="accountAvatar" class="account-avatar-mini" style="display: none;"></span>
+            <span id="accountLabel">Log In</span>
+          </button>
           <label class="upload-btn-label">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -168,6 +171,80 @@
           </div>
         </div>
       </section>
+    </div>
+
+    <!-- ACCOUNT / AUTH MODAL -->
+    <div id="accountModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modalTitle">Your Account</h3>
+          <button id="closeModalBtn" class="modal-close-btn" aria-label="Close">&times;</button>
+        </div>
+
+        <!-- 1. Logged In View -->
+        <div id="loggedInView" style="display: none;">
+          <div class="profile-card">
+            <div id="profileAvatarLarge" class="profile-avatar-large"></div>
+            <div class="profile-details">
+              <h4 id="profileName" class="profile-name">User</h4>
+              <p id="profileEmail" class="profile-email">user@email.com</p>
+            </div>
+          </div>
+
+          <!-- Switch Account List -->
+          <div class="account-switch-section">
+            <div class="switch-section-title">Saved Accounts on this Device</div>
+            <div id="savedAccountsList" class="saved-accounts-list">
+              <!-- Rendered dynamically -->
+            </div>
+            <button id="btnAddAccount" class="btn-pill-subtle" style="width: 100%; margin-top: 10px;">
+              + Add / Switch to Another Account
+            </button>
+          </div>
+
+          <div style="margin-top: 24px; display: flex; gap: 10px;">
+            <button id="btnLogout" class="btn-pill-danger" style="flex: 1;">Log Out</button>
+            <button id="closeModalActionBtn" class="btn-pill" style="flex: 1;">Close</button>
+          </div>
+        </div>
+
+        <!-- 2. Auth Form (Login / Sign Up) -->
+        <div id="authFormView">
+          <div class="auth-tabs">
+            <button id="tabLogin" class="auth-tab active">Log In</button>
+            <button id="tabSignup" class="auth-tab">Create Account</button>
+          </div>
+
+          <form id="authForm" class="auth-form" onsubmit="return false;">
+            <div class="form-group" id="groupDisplayName" style="display: none;">
+              <label for="inputDisplayName">Your Name / Handle</label>
+              <input type="text" id="inputDisplayName" class="auth-input" placeholder="e.g. Thaarunya" autocomplete="name" />
+            </div>
+
+            <div class="form-group">
+              <label for="inputEmail">Email Address</label>
+              <input type="email" id="inputEmail" class="auth-input" placeholder="name@domain.com" required autocomplete="email" />
+            </div>
+
+            <div class="form-group">
+              <label for="inputPassword">Password (Optional)</label>
+              <input type="password" id="inputPassword" class="auth-input" placeholder="••••••••" autocomplete="current-password" />
+            </div>
+
+            <div id="authErrorMsg" class="auth-error" style="display: none;"></div>
+
+            <button type="submit" id="btnSubmitAuth" class="btn-pill primary" style="width: 100%; margin-top: 12px; justify-content: center;">
+              Log In
+            </button>
+          </form>
+
+          <!-- Saved accounts to switch directly -->
+          <div id="authSavedAccountsBlock" style="margin-top: 20px; display: none;">
+            <div class="switch-section-title">Or switch to a saved account:</div>
+            <div id="authSavedAccountsList" class="saved-accounts-list"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

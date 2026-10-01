@@ -13,6 +13,7 @@ export interface SourceAudioRecord {
 export interface RenderedSongRecord {
   id: string; // unique version id
   trackId: string;
+  userId?: string;
   title: string;
   artist?: string;
   recipe: AudioRecipe;
@@ -80,10 +81,14 @@ export async function saveRenderedSong(record: RenderedSongRecord): Promise<void
   await db.put('rendered_songs', record);
 }
 
-export async function getAllRenderedSongs(): Promise<RenderedSongRecord[]> {
+export async function getAllRenderedSongs(userId?: string): Promise<RenderedSongRecord[]> {
   const db = await getDatabase();
   const songs = await db.getAllFromIndex('rendered_songs', 'by-date');
-  return songs.reverse(); // newest first
+  const reversed = songs.reverse();
+  if (userId) {
+    return reversed.filter((s) => !s.userId || s.userId === userId);
+  }
+  return reversed;
 }
 
 export async function getRenderedSong(id: string): Promise<RenderedSongRecord | undefined> {
