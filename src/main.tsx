@@ -8,17 +8,23 @@ import {
   deleteRenderedSong,
   RenderedSongRecord,
 } from './core/storage/db';
-import { SilkShaderRenderer } from './core/visuals/silkShader';
+import { createRoot } from 'react-dom/client';
+import { Waves } from '@/components/ui/wave-background';
 import { authManager } from './core/auth/authManager';
 
-// 1. Initialize Animated WebGL1 "Silk" Flow Shader Background
-const canvas = document.getElementById('shaderCanvas') as HTMLCanvasElement;
-const silkRenderer = new SilkShaderRenderer(canvas);
-silkRenderer.start();
-
-window.addEventListener('resize', () => {
-  silkRenderer.resize();
-});
+// 1. Initialize Animated Interactive Wave Background (React)
+const waveContainer = document.getElementById('waveBackground');
+if (waveContainer) {
+  const root = createRoot(waveContainer);
+  root.render(
+    <Waves
+      className="w-full h-full"
+      strokeColor="#ffffff"
+      backgroundColor="#000000"
+      pointerSize={0.5}
+    />
+  );
+}
 
 // 2. Audio Engines & State
 const previewEngine = new LivePreviewEngine();
@@ -856,7 +862,7 @@ authManager.subscribe((activeAccount) => {
     accountLabel.textContent = activeAccount.displayName;
   } else {
     accountAvatar.style.display = 'none';
-    accountLabel.textContent = 'Log In';
+    accountLabel.textContent = 'Login';
   }
   loadPlaylistView();
 });

@@ -11,23 +11,27 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <!-- 1. Animated WebGL1 "Silk" Shader Canvas -->
-    <canvas id="shaderCanvas"></canvas>
+    <!-- 1. Interactive React Wave Background -->
+    <div id="waveBackground" class="waves-bg-container"></div>
 
     <!-- Hidden native audio element for screen-off playback -->
     <audio id="persistentAudioElement" preload="auto" playsinline webkit-playsinline></audio>
 
     <div class="app-container">
-      <!-- Top Bar -->
-      <header class="header">
-        <a href="#" class="brand">
-          <span class="brand-title">parallels</span>
-        </a>
-        <div class="header-actions">
-          <button id="accountBtn" class="account-btn" aria-label="Account">
-            <span id="accountAvatar" class="account-avatar-mini" style="display: none;"></span>
-            <span id="accountLabel">Log In</span>
-          </button>
+      <!-- Top Section: Exact Parallels Brutalist Header -->
+      <header class="header-hero-wrapper">
+        <div class="parallels-hero-banner">
+          <div class="banner-box-back"></div>
+          <div class="banner-box-front">
+            <h1 class="banner-title">Parallels</h1>
+            <button id="accountBtn" class="banner-login-btn" aria-label="Account">
+              <span id="accountAvatar" class="account-avatar-mini" style="display: none;"></span>
+              <span id="accountLabel">Login</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="header-sub-actions">
           <label class="upload-btn-label">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -247,6 +251,6 @@
       </div>
     </div>
 
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
